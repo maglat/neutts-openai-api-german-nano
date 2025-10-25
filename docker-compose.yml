@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  neutts-api:
+    build: .
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./neuttsair:/app/neuttsair
+    restart: unless-stopped
