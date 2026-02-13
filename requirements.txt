@@ -15,6 +15,3 @@ neutts
 
 # Optional: ONNX decoder support (laut Model Card + ONNX Decoder Card)
 onnxruntime>=1.16
-
-# Optional: GGUF runtime (CPU-only by default; GPU via custom build)
-llama-cpp-python
