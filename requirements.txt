@@ -1,13 +1,20 @@
-librosa==0.11.0
-neucodec>=0.0.4
-numpy==2.2.6
-phonemizer==3.3.0
-soundfile==0.13.1
-torch==2.8.0
-transformers==4.56.1
-resemble-perth==1.0.1
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+
+numpy>=1.26
+soundfile>=0.12
+python-multipart>=0.0.9
+orjson>=3.9
+
+# Hugging Face Hub / caching
+huggingface-hub>=0.23
+
+# Core TTS stack (laut Model Card)
+neutts
+
+# Optional: ONNX decoder support (laut Model Card + ONNX Decoder Card)
+onnxruntime>=1.16
+
+# Optional: GGUF runtime (CPU-only by default; GPU via custom build)
 llama-cpp-python
-onnxruntime
-fastapi[standard]
-uvicorn
-pydub
