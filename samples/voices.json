@@ -1,3 +1,8 @@
 {
-  "default": { "wav": "greta.wav", "txt": "greta.txt", "codes": "greta.pt" }
+  "default":  { "wav": "greta.wav", "txt": "greta.txt", "codes": "greta.pt" },
+  "greta":    { "wav": "greta.wav", "txt": "greta.txt", "codes": "greta.pt" },
+  "dave":     { "wav": "dave.wav",  "txt": "dave.txt",  "codes": "dave.pt" },
+  "jo":       { "wav": "jo.wav",    "txt": "jo.txt",    "codes": "jo.pt" },
+  "juliette": { "wav": "juliette.wav", "txt": "juliette.txt", "codes": "juliette.pt" },
+  "mateo":    { "wav": "mateo.wav", "txt": "mateo.txt", "codes": "mateo.pt" }
 }
