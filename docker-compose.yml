@@ -2,7 +2,7 @@ services:
   neutts:
     build: .
     ports:
-      - "8000:8000"
+      - "8136:8000"
     environment:
       # Model + codec
       NEUTTS_BACKBONE_REPO: "neuphonic/neutts-nano-german"
