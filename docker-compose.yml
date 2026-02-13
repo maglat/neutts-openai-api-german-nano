@@ -1,19 +1,36 @@
-version: '3.8'
-
 services:
-  neutts-api:
+  neutts:
     build: .
     ports:
       - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     environment:
-      - CUDA_VISIBLE_DEVICES=0
+      # Model + codec
+      NEUTTS_BACKBONE_REPO: "neuphonic/neutts-nano-german"
+      NEUTTS_CODEC_REPO: "neuphonic/neucodec"
+      NEUTTS_BACKBONE_DEVICE: "cpu"
+      NEUTTS_CODEC_DEVICE: "cpu"
+
+      # Voice samples inside container
+      VOICE_SAMPLES_DIR: "/voices"
+
+      # Hugging Face cache inside container
+      HF_HOME: "/cache/huggingface"
+
+      # Optional: token for private repos / higher rate limits
+      # HUGGINGFACE_HUB_TOKEN: "${HUGGINGFACE_HUB_TOKEN}"
+
     volumes:
-      - ./neuttsair:/app/neuttsair
-    restart: unless-stopped
+      # 1) Voice samples from your Ubuntu server (read-only!)
+      - /srv/neutts/voices:/voices:ro
+
+      # 2) Persist Hugging Face cache across restarts
+      - hf-cache:/cache/huggingface
+
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8000/health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  hf-cache:
