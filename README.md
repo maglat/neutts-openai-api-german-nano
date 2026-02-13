@@ -6,9 +6,9 @@ A FastAPI-based text-to-speech service using NeuTTS Air with **full OpenAI TTS s
 
 This service is fully compatible with the OpenAI TTS streaming API. Set up as shown below, then use with:
 
-- **Pipecat** - Replace base URL with `localhost:8000/v1/`
-- **LiveKit** - Replace base URL with `localhost:8000/v1/`
-- **OpenWebUI** - Replace base URL with `localhost:8000/v1/`
+- **Pipecat** - Replace base URL with `localhost:8136/v1/`
+- **LiveKit** - Replace base URL with `localhost:8136/v1/`
+- **OpenWebUI** - Replace base URL with `localhost:8136/v1/`
 
 ## Features
 
@@ -25,8 +25,8 @@ This service is fully compatible with the OpenAI TTS streaming API. Set up as sh
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Edward-Zion-Saji/neutts-openai-api.git
-   cd neutts-openai-api
+   git clone https://github.com/maglat/neutts-openai-api-german-nano
+   cd neutts-openai-api-german-nano
    ```
 
 2. **Create and activate virtual environment**
@@ -45,26 +45,26 @@ This service is fully compatible with the OpenAI TTS streaming API. Set up as sh
    python openai.py
    ```
 
-The API will be available at `http://localhost:8000`
+The API will be available at `http://localhost:8136`
 
 ### Option 2: Docker with GPU Support
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Edward-Zion-Saji/neutts-openai-api.git
-   cd neutts-openai-api
+   git clone https://github.com/maglat/neutts-openai-api-german-nano
+   cd neutts-openai-api-german-nano
    ```
 
 2. **Build the Docker image**
    ```bash
-   docker build -t neutts-openai-api .
+   docker build -t neutts-openai-api-german-nano .
    ```
 
 3. **Run with GPU support**
 
    **Option A: Docker run**
    ```bash
-   docker run --gpus all -p 8000:8000 neutts-openai-api
+   docker run --gpus all -p 8136:8000 neutts-openai-api-german-nano
    ```
 
    **Option B: Docker Compose (recommended)**
@@ -111,7 +111,7 @@ POST /v1/audio/speech
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - CUDA-compatible GPU (for GPU acceleration)
 - Linux (recommended for Docker)
 
@@ -155,7 +155,7 @@ pipeline = Pipeline([
 # Change to use local NeuTTS service
 pipeline = Pipeline([
     OpenAILLMService(api_key="your-key", model="gpt-4"),
-    ElevenLabsTTSService(api_key="dummy", voice_id="coral", base_url="http://localhost:8000/v1/")
+    ElevenLabsTTSService(api_key="dummy", voice_id="coral", base_url="http://localhost:8136/v1/")
 ])
 ```
 
@@ -166,14 +166,14 @@ from livekit.agents.voice_assistant import VoiceAssistant
 from livekit.plugins import openai
 
 # Configure OpenAI TTS to use local NeuTTS
-openai.TTS_BASE_URL = "http://localhost:8000/v1/"
+openai.TTS_BASE_URL = "http://localhost:8136/v1/"
 ```
 
 ### OpenWebUI Integration
 ```yaml
 # In your OpenWebUI configuration
 openai:
-  base_url: "http://localhost:8000/v1/"
+  base_url: "http://localhost:8136/v1/"
   api_key: "dummy"  # Not used by NeuTTS
 ```
 
