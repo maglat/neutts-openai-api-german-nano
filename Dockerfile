@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     espeak-ng \
     ffmpeg \
     libsndfile1 \
+    gcc g++ make cmake \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
