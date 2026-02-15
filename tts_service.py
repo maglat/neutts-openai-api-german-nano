@@ -3,7 +3,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import soundfile as sf
@@ -19,15 +19,13 @@ class VoiceAsset:
 
 
 class VoiceRegistry:
-    """
-    Supports BOTH:
-      1) voices.json manifest (optional)
-      2) automatic folder scan
+    """Loads voices from voices.json inside VOICE_SAMPLES_DIR.
 
-    Merge rule:
-      - If voices.json exists: load it first (authoritative)
-      - Always scan folder: add any voices not present in manifest
-      - This prevents voices.json from "hiding" other voices.
+    voices.json format:
+      {
+        "default": {"wav": "default.wav", "txt": "default.txt", "codes": "default.pt"},
+        "greta":   {"wav": "greta.wav",   "txt": "greta.txt",   "codes": "greta.pt"}
+      }
     """
 
     def __init__(self, voice_dir: Path, manifest_name: str = "voices.json") -> None:
@@ -35,7 +33,10 @@ class VoiceRegistry:
         self.manifest_path = voice_dir / manifest_name
         self.voices: Dict[str, VoiceAsset] = {}
 
-    def _load_from_manifest(self) -> Dict[str, VoiceAsset]:
+    def load(self) -> None:
+        if not self.manifest_path.exists():
+            raise RuntimeError(f"voices manifest not found: {self.manifest_path}")
+
         data = json.loads(self.manifest_path.read_text(encoding="utf-8"))
         voices: Dict[str, VoiceAsset] = {}
 
@@ -53,55 +54,7 @@ class VoiceRegistry:
 
             voices[voice_id] = VoiceAsset(wav_path=wav, txt_path=txt, codes_path=codes)
 
-        return voices
-
-    def _load_by_scanning(self) -> Dict[str, VoiceAsset]:
-        voices: Dict[str, VoiceAsset] = {}
-        if not self.voice_dir.exists():
-            return voices
-
-        for wav in sorted(self.voice_dir.glob("*.wav")):
-            voice_id = wav.stem
-            txt = self.voice_dir / f"{voice_id}.txt"
-            if not txt.exists():
-                continue
-
-            codes = None
-            for ext in (".pt", ".pth", ".bin", ".npy"):
-                c = self.voice_dir / f"{voice_id}{ext}"
-                if c.exists():
-                    codes = c
-                    break
-
-            voices[voice_id] = VoiceAsset(wav_path=wav, txt_path=txt, codes_path=codes)
-
-        return voices
-
-    def load(self) -> None:
-        voices: Dict[str, VoiceAsset] = {}
-
-        # 1) Manifest (if present)
-        if self.manifest_path.exists():
-            voices.update(self._load_from_manifest())
-
-        # 2) Always scan folder and merge missing voices
-        scanned = self._load_by_scanning()
-        for vid, asset in scanned.items():
-            if vid not in voices:
-                voices[vid] = asset
-
         self.voices = voices
-
-        if not self.voices:
-            raise RuntimeError(
-                f"No voices found in {self.voice_dir}. "
-                f"Provide voices.json OR at least one pair <voice>.wav + <voice>.txt."
-            )
-
-        # Ensure default exists
-        if "default" not in self.voices:
-            first = next(iter(self.voices.keys()))
-            self.voices["default"] = self.voices[first]
 
     def resolve(self, voice_id: str) -> VoiceAsset:
         if voice_id not in self.voices:
@@ -111,14 +64,43 @@ class VoiceRegistry:
             )
         return self.voices[voice_id]
 
-    def list_ids(self) -> list[str]:
-        return sorted(self.voices.keys())
-
 
 class NeuttsNanoGermanService:
     def __init__(self) -> None:
-        self.backbone_repo = os.getenv("NEUTTS_BACKBONE_REPO", "neuphonic/neutts-nano-german")
+        # ---------------------------------------------------------------------
+        # Backbone selection (FP32 vs GGUF quantized variants)
+        #
+        # Priority:
+        #   1) NEUTTS_BACKBONE_REPO (explicit)
+        #   2) NEUTTS_MODEL_BASE + NEUTTS_BACKBONE_VARIANT
+        #
+        # Examples:
+        #   FP32: NEUTTS_MODEL_BASE=neutts-nano-german, NEUTTS_BACKBONE_VARIANT=fp32
+        #   Q8:   NEUTTS_MODEL_BASE=neutts-nano-german, NEUTTS_BACKBONE_VARIANT=q8
+        #   Q4:   NEUTTS_MODEL_BASE=neutts-nano-german, NEUTTS_BACKBONE_VARIANT=q4
+        #
+        # Mapping (Neuphonic HF naming):
+        #   fp32 -> neuphonic/<base>
+        #   q8   -> neuphonic/<base>-q8-gguf
+        #   q4   -> neuphonic/<base>-q4-gguf
+        # ---------------------------------------------------------------------
+        explicit_repo = os.getenv("NEUTTS_BACKBONE_REPO")
+        model_base = os.getenv("NEUTTS_MODEL_BASE", "neutts-nano-german").strip()
+        variant = os.getenv("NEUTTS_BACKBONE_VARIANT", "fp32").strip().lower()
+
+        if explicit_repo and explicit_repo.strip():
+            self.backbone_repo = explicit_repo.strip()
+        else:
+            if variant == "q4":
+                self.backbone_repo = f"neuphonic/{model_base}-q4-gguf"
+            elif variant == "q8":
+                self.backbone_repo = f"neuphonic/{model_base}-q8-gguf"
+            else:
+                self.backbone_repo = f"neuphonic/{model_base}"
+
         self.codec_repo = os.getenv("NEUTTS_CODEC_REPO", "neuphonic/neucodec")
+
+        # Devices: "cpu" or "cuda"
         self.backbone_device = os.getenv("NEUTTS_BACKBONE_DEVICE", "cpu")
         self.codec_device = os.getenv("NEUTTS_CODEC_DEVICE", "cpu")
 
@@ -126,15 +108,21 @@ class NeuttsNanoGermanService:
         self.registry = VoiceRegistry(voice_dir=voice_dir)
         self.tts: Optional[NeuTTS] = None
 
-    def list_voices(self) -> list[str]:
-        try:
-            return self.registry.list_ids()
-        except Exception:
-            return []
-
     def startup(self) -> None:
+        # Load voices first (fail fast)
         self.registry.load()
 
+        # If GGUF backbone is selected, we need llama-cpp-python installed
+        if "gguf" in self.backbone_repo.lower():
+            try:
+                import llama_cpp  # noqa: F401
+            except Exception as e:  # pragma: no cover
+                raise RuntimeError(
+                    "GGUF backbone selected but llama-cpp-python is not installed.\n"
+                    "Fix: add 'llama-cpp-python' to requirements.txt and rebuild the image."
+                ) from e
+
+        # Load model once
         self.tts = NeuTTS(
             backbone_repo=self.backbone_repo,
             backbone_device=self.backbone_device,
@@ -145,60 +133,53 @@ class NeuttsNanoGermanService:
     def _encode_reference(self, asset: VoiceAsset):
         assert self.tts is not None
 
+        # Prefer cached codes if provided (your *.pt files)
         if asset.codes_path is not None:
-            suffix = asset.codes_path.suffix.lower()
-            if suffix == ".npy":
-                return np.load(asset.codes_path)
-
             import torch
             return torch.load(asset.codes_path, map_location="cpu")
 
+        # Otherwise compute on the fly from wav
         return self.tts.encode_reference(str(asset.wav_path))
 
-    def synthesize_wav_24k(self, text: str, voice_id: str):
+    def synthesize_wav_24k(self, text: str, voice_id: str) -> Tuple[np.ndarray, int, Dict]:
         assert self.tts is not None
 
-        voice_id = (voice_id or "default").strip() or "default"
         asset = self.registry.resolve(voice_id)
-
         ref_text = asset.txt_path.read_text(encoding="utf-8").strip()
         ref_codes = self._encode_reference(asset)
 
         t0 = time.time()
-        wav = self.tts.infer(text, ref_codes, ref_text)
+        wav = self.tts.infer(text, ref_codes, ref_text)  # 24kHz waveform
         latency_s = time.time() - t0
 
         meta = {
             "voice_id": voice_id,
             "latency_s": latency_s,
             "sample_rate": 24000,
+            "backbone_repo": self.backbone_repo,
+            "codec_repo": self.codec_repo,
+            "backbone_device": self.backbone_device,
+            "codec_device": self.codec_device,
         }
         return wav, 24000, meta
 
     def write_audio(self, wav: np.ndarray, sr: int, fmt: str, out_path: Path) -> None:
-        fmt = (fmt or "mp3").strip().lower()
-
-        if fmt == "wav":
-            sf.write(str(out_path), wav, sr)
-            return
-
+        # Write WAV first then optionally convert using ffmpeg for mp3/flac/opus/aac.
         tmp_wav = out_path.with_suffix(".wav")
         sf.write(str(tmp_wav), wav, sr)
 
+        if fmt == "wav":
+            tmp_wav.replace(out_path)
+            return
+
         if fmt == "pcm":
-            wav.astype(np.float32, copy=False).tofile(out_path)
+            # raw little-endian float32 PCM
+            wav_f32 = wav.astype(np.float32, copy=False)
+            out_path.write_bytes(wav_f32.tobytes())
             tmp_wav.unlink(missing_ok=True)
             return
 
         import subprocess
-
-        if fmt == "mp3":
-            cmd = ["ffmpeg", "-y", "-i", str(tmp_wav), "-codec:a", "libmp3lame", "-q:a", "4", str(out_path)]
-        else:
-            cmd = ["ffmpeg", "-y", "-i", str(tmp_wav), str(out_path)]
-
+        cmd = ["ffmpeg", "-y", "-i", str(tmp_wav), str(out_path)]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         tmp_wav.unlink(missing_ok=True)
-
-        if not out_path.exists():
-            raise RuntimeError(f"ffmpeg did not create output: {out_path}")
