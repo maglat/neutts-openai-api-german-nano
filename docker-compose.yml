@@ -5,7 +5,8 @@ services:
       - "8136:8000"
     environment:
       # Model + codec
-      NEUTTS_BACKBONE_REPO: "neuphonic/neutts-nano-german"
+      NEUTTS_MODEL_BASE: "neutts-nano-german"
+      NEUTTS_BACKBONE_VARIANT: "q4"   # fp32 | q8 | q4
       NEUTTS_CODEC_REPO: "neuphonic/neucodec"
       NEUTTS_BACKBONE_DEVICE: "cpu"
       NEUTTS_CODEC_DEVICE: "cpu"
@@ -21,7 +22,7 @@ services:
 
     volumes:
       # 1) Voice samples from your Ubuntu server (read-only!)
-      - /srv/neutts/voices:/voices:ro
+      - /srv/neutts/voices:/voices:rw
 
       # 2) Persist Hugging Face cache across restarts
       - hf-cache:/cache/huggingface
